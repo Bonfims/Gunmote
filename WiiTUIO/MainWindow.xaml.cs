@@ -267,11 +267,16 @@ namespace WiiTUIO
             {
                 if (dolphinBarDetected)
                 {
-                    Console.WriteLine("MainWindow: DolphinBar detected — skipping WiiPair, using direct HID discovery");
-                    this.tbPair2.Text = "DolphinBar detected. Pair Wiimotes using the bar's SYNC button.";
+                    Console.WriteLine("MainWindow: DolphinBar detected — NOT starting auto-scan (prevents HID disruption)");
+                    this.tbPair2.Text = "DolphinBar detected. Connect Wiimotes using bar's SYNC button, then click Pair.";
                     this.tbPair2.Visibility = Visibility.Visible;
+                    // Do NOT call connectProvider() — opening HID handles disrupts the bar's connection.
+                    // The user must click "Pair Wiimotes" to manually trigger connection.
                 }
-                this.connectProvider();
+                else
+                {
+                    this.connectProvider();
+                }
             }
 
             AppSettingsUC settingspanel = new AppSettingsUC();
