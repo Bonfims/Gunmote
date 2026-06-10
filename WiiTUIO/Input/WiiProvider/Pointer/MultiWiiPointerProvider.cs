@@ -13,6 +13,7 @@ using WiiTUIO.Properties;
 using System.Windows.Controls;
 using System.Threading;
 using WiiTUIO.Output;
+using WiiTUIO;
 
 namespace WiiTUIO.Provider
 {
@@ -235,7 +236,31 @@ namespace WiiTUIO.Provider
                 }
 
                 this.pWC.Clear();
+                Console.WriteLine("MultiWiiPointerProvider: Scanning for Wii Remotes via HID...");
                 this.pWC.FindAllWiimotes();
+                Console.WriteLine("MultiWiiPointerProvider: Found {0} Wii Remote(s) via WiimoteLib", this.pWC.Count);
+
+                // If WiimoteLib found nothing and DolphinBar is present,
+                // the CSR Bluetooth driver may not be loaded. Try direct HID enumeration
+                // for Nintendo devices as a fallback.
+                if (this.pWC.Count == 0 && DolphinBarHelper.IsDolphinBarPresent())
+                {
+                    Console.WriteLine("MultiWiiPointerProvider: DolphinBar detected but no Wii Remotes found. Trying direct HID...");
+                    var hidPaths = DolphinBarHelper.GetWiimoteDevicePaths();
+                    Console.WriteLine("MultiWiiPointerProvider: Direct HID found {0} devices", hidPaths.Count);
+
+                    // We can't create Wiimote objects directly (internal constructor),
+                    // but we can try to force WiimoteLib to rescan. The Wii Remote might
+                    // need a moment after being paired via the bar's SYNC button.
+                    // Wait and retry once.
+                    if (hidPaths.Count > 0)
+                    {
+                        Console.WriteLine("MultiWiiPointerProvider: Wii Remote HID devices found, retrying WiimoteLib scan...");
+                        System.Threading.Thread.Sleep(500);
+                        this.pWC.FindAllWiimotes();
+                        Console.WriteLine("MultiWiiPointerProvider: Retry found {0} Wii Remote(s)", this.pWC.Count);
+                    }
+                }
 
                 foreach (Wiimote pDevice in pWC)
                 {

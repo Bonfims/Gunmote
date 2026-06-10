@@ -212,6 +212,7 @@
     <Compile Include="ArcadeHook\OutputProvider.cs" />
     <Compile Include="Autostart.cs" />
     <Compile Include="DebugVisualizer.cs" />
+    <Compile Include="DolphinBarHelper.cs" />
     <Compile Include="LanguageSelectorUC.xaml.cs">
       <DependentUpon>LanguageSelectorUC.xaml</DependentUpon>
     </Compile>

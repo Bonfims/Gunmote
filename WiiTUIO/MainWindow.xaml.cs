@@ -253,13 +253,24 @@ namespace WiiTUIO
             this.createProvider();
             //this.createProviderHandler();
 
-            if (Settings.Default.pairOnStart)
+            // Check for Mayflash DolphinBar — if present, skip WiiPair Bluetooth scanning
+            // because the Bluetooth radio enumeration disrupts the bar's internal
+            // Wii Remote connection. The DolphinBar handles pairing via its SYNC button.
+            bool dolphinBarDetected = DolphinBarHelper.IsDolphinBarPresent();
+
+            if (Settings.Default.pairOnStart && !dolphinBarDetected)
             {
                 this.startupPair = true;
                 this.runWiiPair();
             }
-            else //if (Settings.Default.connectOnStart)
+            else
             {
+                if (dolphinBarDetected)
+                {
+                    Console.WriteLine("MainWindow: DolphinBar detected — skipping WiiPair, using direct HID discovery");
+                    this.tbPair2.Text = "DolphinBar detected. Pair Wiimotes using the bar's SYNC button.";
+                    this.tbPair2.Visibility = Visibility.Visible;
+                }
                 this.connectProvider();
             }
 
@@ -1171,9 +1182,19 @@ namespace WiiTUIO
 
         private void PairWiimotes_Click(object sender, RoutedEventArgs e)
         {
-            //this.disableMainControls();
-            //this.pairWiimoteOverlay.Visibility = Visibility.Visible;
-            //this.pairWiimoteOverlayPairing.Visibility = Visibility.Visible;
+            // If DolphinBar is detected, skip Bluetooth pairing — the bar handles
+            // pairing via its SYNC button. Go straight to HID discovery.
+            if (DolphinBarHelper.IsDolphinBarPresent())
+            {
+                Console.WriteLine("MainWindow: DolphinBar detected — skipping Bluetooth pairing");
+                this.stopWiiPair();
+                this.pairWiimoteText.Text = "DolphinBar detected. Pair Wiimotes with the bar's SYNC button.";
+                this.pairWiimotePressSync.Visibility = Visibility.Visible;
+                this.pairProgress.IsActive = false;
+                // Connect provider to discover Wiimotes via HID
+                this.connectProvider();
+                return;
+            }
 
             this.runWiiPair();
         }
