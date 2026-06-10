@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -17,6 +18,7 @@ namespace WiiTUIO.Output
     public class D3DCursorWindow
     {
         private static D3DCursorWindow defaultInstance;
+        private static bool d3dCursorAvailable;
 
         private Screen primaryScreen;
 
@@ -34,6 +36,12 @@ namespace WiiTUIO.Output
 
         private D3DCursorWindow()
         {
+            d3dCursorAvailable = File.Exists("D3DCursor.dll");
+            if (!d3dCursorAvailable)
+            {
+                Console.WriteLine("D3DCursorWindow: D3DCursor.dll not found, cursor overlay disabled");
+            }
+
             Settings.Default.PropertyChanged += SettingsChanged;
             SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
             cursors = new List<D3DCursor>(2);
@@ -53,6 +61,7 @@ namespace WiiTUIO.Output
 
         private void updateWindowToScreen(Screen screen)
         {
+            if (!d3dCursorAvailable) return;
             Console.WriteLine("Setting cursor window position to " + screen.Bounds);
             SetD3DCursorWindowPosition(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height, true);
         }
@@ -90,6 +99,7 @@ namespace WiiTUIO.Output
         //Should be run with a dispatcher
         public void Start(IntPtr parent)
         {
+            if (!d3dCursorAvailable) return;
             StartD3DCursorWindow(Process.GetCurrentProcess().Handle, parent, primaryScreen.Bounds.X, primaryScreen.Bounds.Y, primaryScreen.Bounds.Width, primaryScreen.Bounds.Height, true, (float)Settings.Default.pointer_cursorSize);
             updateWindowToScreen(primaryScreen);
         }
@@ -105,11 +115,13 @@ namespace WiiTUIO.Output
             mutex.WaitOne();
             cursors.Add(cursor);
 
-            AddD3DCursor(cursor.ID, (uint)((((uint)cursor.Color.R) << 16) | (((uint)cursor.Color.G) << 8) | (uint)cursor.Color.B));
-
-            SetD3DCursorPosition(cursor.ID, cursor.X, cursor.Y);
-            SetD3DCursorPressed(cursor.ID, cursor.Pressed);
-            SetD3DCursorHidden(cursor.ID, cursor.Hidden);
+            if (d3dCursorAvailable)
+            {
+                AddD3DCursor(cursor.ID, (uint)((((uint)cursor.Color.R) << 16) | (((uint)cursor.Color.G) << 8) | (uint)cursor.Color.B));
+                SetD3DCursorPosition(cursor.ID, cursor.X, cursor.Y);
+                SetD3DCursorPressed(cursor.ID, cursor.Pressed);
+                SetD3DCursorHidden(cursor.ID, cursor.Hidden);
+            }
             mutex.ReleaseMutex();
         }
 
@@ -118,7 +130,8 @@ namespace WiiTUIO.Output
             mutex.WaitOne();
             cursors.Remove(cursor);
 
-            RemoveD3DCursor(cursor.ID);
+            if (d3dCursorAvailable)
+                RemoveD3DCursor(cursor.ID);
             mutex.ReleaseMutex();
         }
 
@@ -127,6 +140,8 @@ namespace WiiTUIO.Output
 
         public void RefreshCursors()
         {
+            if (!d3dCursorAvailable) return;
+
             bool anyCursorIsVisible = false;
             foreach(D3DCursor cursor in cursors)
             {

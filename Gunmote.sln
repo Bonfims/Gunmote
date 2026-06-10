@@ -6,7 +6,6 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiiTUIO", "WiiTUIO\WiiTUIO.csproj", "{87CC8302-A614-490E-9100-1059AF5FE8FC}"
 	ProjectSection(ProjectDependencies) = postProject
 		{9E8F1D50-74EA-4C60-BD5C-AB2C5B53BC66} = {9E8F1D50-74EA-4C60-BD5C-AB2C5B53BC66}
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C} = {4796387A-2F8E-4ED0-96E4-A72137B4428C}
 		{78EB9DE8-B6FC-47F3-970F-0B4FCB0F38A8} = {78EB9DE8-B6FC-47F3-970F-0B4FCB0F38A8}
 	EndProjectSection
 EndProject
@@ -16,7 +15,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HidLibrary", "HidLibrary\Hi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DriverInstall", "DriverInstall\DriverInstall.csproj", "{914C6098-F4B6-4AFA-AFD0-5B90411C9271}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3DCursor", "D3DCursor\D3DCursor.vcxproj", "{4796387A-2F8E-4ED0-96E4-A72137B4428C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -56,14 +54,6 @@ Global
 		{914C6098-F4B6-4AFA-AFD0-5B90411C9271}.Release|x64.Build.0 = Release|x64
 		{914C6098-F4B6-4AFA-AFD0-5B90411C9271}.Release|x86.ActiveCfg = Release|x86
 		{914C6098-F4B6-4AFA-AFD0-5B90411C9271}.Release|x86.Build.0 = Release|x86
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Debug|x64.ActiveCfg = Debug|x64
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Debug|x64.Build.0 = Debug|x64
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Debug|x86.ActiveCfg = Debug|Win32
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Debug|x86.Build.0 = Debug|Win32
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Release|x64.ActiveCfg = Release|x64
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Release|x64.Build.0 = Release|x64
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Release|x86.ActiveCfg = Release|Win32
-		{4796387A-2F8E-4ED0-96E4-A72137B4428C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

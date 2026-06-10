@@ -23,22 +23,8 @@ jobs:
       - name: Restore NuGet packages
         run: nuget restore Gunmote.sln
 
-      - name: Install DirectX SDK headers (legacy d3dx9, needed by D3DCursor)
-        shell: powershell
-        run: |
-          $url = "https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4A09-9BA6-8D4EF89B88B2/DXSDK_Jun10.exe"
-          $output = "$env:TEMP\DXSDK_Jun10.exe"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          Start-Process -FilePath $output -ArgumentList "/U /Q" -Wait -NoNewWindow
-          echo "DirectX SDK installed"
-
       - name: Build Release x64
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          set INCLUDE=C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include;%INCLUDE%
-          set LIB=C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Lib\x64;%LIB%
-          msbuild Gunmote.sln /t:Build /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /m
+        run: msbuild Gunmote.sln /t:Build /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /m
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
