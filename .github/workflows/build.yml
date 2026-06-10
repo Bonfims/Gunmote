@@ -26,12 +26,51 @@ jobs:
       - name: Build Release x64
         run: msbuild Gunmote.sln /t:Build /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /m
 
+      - name: Prepare artifact
+        shell: powershell
+        run: |
+          $dist = "dist\Gunmote"
+          New-Item -ItemType Directory -Force -Path $dist
+
+          # Main executable and managed DLLs from WiiTUIO build
+          Copy-Item -Recurse -Force WiiTUIO\bin\x64\Release\* $dist\
+
+          # Native DLLs from source directory (P/Invoke dependencies)
+          Copy-Item -Force WiiTUIO\VMultiDll_x64.dll $dist\
+          Copy-Item -Force WiiTUIO\VMultiDllWrapper.dll $dist\
+          Copy-Item -Force WiiTUIO\VMultiDll_x86.dll $dist\
+
+          # Precompiled managed DLLs from source directory
+          Copy-Item -Force WiiTUIO\WiimoteLib.dll $dist\
+          Copy-Item -Force WiiTUIO\HIDLibrary.dll $dist\
+          Copy-Item -Force WiiTUIO\ScpControl.dll $dist\
+          Copy-Item -Force WiiTUIO\Microsoft.Win32.TaskScheduler.dll $dist\
+          Copy-Item -Force WiiTUIO\Nefarius.ViGEm.Client.dll $dist\
+
+          # Built native C++ DLL
+          Copy-Item -Force WiiCPP\bin\x64\Release\WiiCPP.dll $dist\
+
+          # Built managed DLLs
+          Copy-Item -Force HidLibrary\bin\x64\Release\HidLibrary.dll $dist\
+
+          # Keymaps
+          if (Test-Path WiiTUIO\Keymaps) {
+            Copy-Item -Recurse -Force WiiTUIO\Keymaps $dist\
+          }
+
+          # App config
+          Copy-Item -Force WiiTUIO\app.config $dist\
+
+          # Resources (custom textures, etc.)
+          if (Test-Path WiiTUIO\Resources) {
+            Copy-Item -Recurse -Force WiiTUIO\Resources $dist\
+          }
+
+          Write-Host "Artifact prepared:"
+          Get-ChildItem $dist -Recurse | ForEach-Object { Write-Host $_.FullName }
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Gunmote-fork-x64
-          path: |
-            WiiTUIO/bin/Release/
-            **/*.exe
-            **/*.dll
-            !**/*.pdb
+          path: dist/Gunmote/
