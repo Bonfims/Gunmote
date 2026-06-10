@@ -33,7 +33,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dist
 
           # Main executable and managed DLLs from WiiTUIO build
-          Copy-Item -Recurse -Force WiiTUIO\bin\x64\Release\* $dist\
+          # Output path is ..\bin\x64\Release\ (relative to project dir) = repo root bin\x64\Release\
+          Copy-Item -Recurse -Force bin\x64\Release\* $dist\
 
           # Native DLLs from source directory (P/Invoke dependencies)
           Copy-Item -Force WiiTUIO\VMultiDll_x64.dll $dist\
