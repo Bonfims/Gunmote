@@ -4,6 +4,7 @@ using System.Configuration;
 using System.Data;
 using System.Linq;
 using System.Windows;
+using System.Runtime.InteropServices;
 
 //using Hardcodet.Wpf.TaskbarNotification;
 using System.Windows.Controls;
@@ -21,6 +22,9 @@ namespace WiiTUIO
     /// </summary>
     public partial class App : Application
     {
+        [DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
+
         /// <summary>
         /// The tray's taskbar icon
         /// </summary>
@@ -28,6 +32,13 @@ namespace WiiTUIO
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            // Allocate a console window for debug output
+            AllocConsole();
+            Console.WriteLine("=== Gunmote Debug Console ===");
+            Console.WriteLine("Starting up...");
+            Console.WriteLine("Args: " + string.Join(", ", e.Args));
+            Console.WriteLine("============================");
+        }
             // Carga la configuración al inicio de la aplicación
             // La llamada a Settings.Default.Load() se realiza implícitamente la primera vez que se accede a Settings.Default
             // Si necesitas forzar una carga explícita al inicio, puedes añadir:

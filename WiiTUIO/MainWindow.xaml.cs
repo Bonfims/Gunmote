@@ -249,14 +249,19 @@ namespace WiiTUIO
             // Check for Mayflash DolphinBar — if present, DON'T touch anything
             // that could access HID/Bluetooth devices. Even loading WiimoteLib
             // or creating WiiPair objects can disrupt the bar's internal connection.
+            Console.WriteLine("[MainWindow] Step 1: Checking for DolphinBar (WMI, no handles)...");
             bool dolphinBarDetected = DolphinBarHelper.IsDolphinBarPresent();
+            Console.WriteLine("[MainWindow] Step 1 result: DolphinBar = " + dolphinBarDetected);
 
             if (!dolphinBarDetected)
             {
+                Console.WriteLine("[MainWindow] Step 2: Normal mode — creating Wii components...");
                 // Normal startup — create Wii components
                 wiiPair = new WiiCPP.WiiPair();
+                Console.WriteLine("[MainWindow] Step 2a: WiiPair created");
                 wiiPair.addListener(this);
                 this.createProvider();
+                Console.WriteLine("[MainWindow] Step 2b: Provider created");
 
                 if (Settings.Default.pairOnStart)
                 {
@@ -270,15 +275,17 @@ namespace WiiTUIO
             }
             else
             {
+                Console.WriteLine("[MainWindow] Step 2: DolphinBar mode — SKIPPING all HID/Bluetooth init");
+                Console.WriteLine("[MainWindow] Step 2: WiiPair=NULL, Provider=NULL, no DLLs loaded");
                 // DolphinBar mode: DON'T create WiiPair or MultiWiiPointerProvider.
                 // These load WiimoteLib/WiiCPP DLLs which touch HID handles and
                 // steal the device from the bar's firmware, causing disconnect.
-                Console.WriteLine("MainWindow: DolphinBar detected — deferring all HID access");
                 this.tbPair2.Text = "DolphinBar detected. Pair Wiimotes with bar's SYNC button first.";
                 this.tbPair2.Visibility = Visibility.Visible;
                 wiiPair = null;
                 // createProvider will be called when user clicks Pair Wiimotes
             }
+            Console.WriteLine("[MainWindow] Step 3: Constructor complete, showing UI...");
 
             AppSettingsUC settingspanel = new AppSettingsUC();
             settingspanel.OnClose += SettingsPanel_OnClose;

@@ -1,30 +1,25 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using HidLibrary;
+using System.Management;
 
 namespace WiiTUIO
 {
     /// <summary>
     /// Helper class to detect Mayflash DolphinBar and work around
-    /// the CSR Bluetooth driver issue where WiiPair's Bluetooth radio
-    /// scanning disrupts the bar's internal Wii Remote connection.
+    /// the CSR Bluetooth driver issue. Uses WMI queries (read-only,
+    /// no device handles opened) to detect the bar without disrupting
+    /// existing Wii Remote connections.
     /// </summary>
     public static class DolphinBarHelper
     {
         // Mayflash DolphinBar VID/PID
         private const int DOLPHINBAR_VID = 0x0079;
-        private const int DOLPHINBAR_PID = 0x1803;  // also 0x1800, 0x1801 on some versions
-
-        // Nintendo Wii Remote VID/PIDs (for direct HID fallback)
-        private const int NINTENDO_VID = 0x057E;
-        private static readonly int[] WIIMOTE_PIDS = { 0x0306, 0x0330 };
+        private const int DOLPHINBAR_PID = 0x1803;
 
         private static bool? _dolphinBarPresent;
 
         /// <summary>
         /// Check if a Mayflash DolphinBar is connected via USB.
-        /// The DolphinBar must be detected via its USB HID interface.
+        /// Uses WMI to query the device tree WITHOUT opening any HID handles.
         /// </summary>
         public static bool IsDolphinBarPresent()
         {
@@ -33,28 +28,43 @@ namespace WiiTUIO
 
             try
             {
-                var devices = HidDevices.Enumerate(DOLPHINBAR_VID, DOLPHINBAR_PID);
-                _dolphinBarPresent = devices.Any();
+                Console.WriteLine("[DolphinBarHelper] Querying WMI for Mayflash devices (no handles opened)...");
 
-                // Also check alternate PIDs
-                if (!_dolphinBarPresent.Value)
+                // Query PnP entities for Mayflash VID/PID. This reads from the registry
+                // and does NOT open any device handles.
+                string vidStr = DOLPHINBAR_VID.ToString("X4");
+                string pidStr = DOLPHINBAR_PID.ToString("X4");
+
+                // Check primary PID
+                using (var searcher = new ManagementObjectSearcher(
+                    @"SELECT Name, DeviceID FROM Win32_PnPEntity WHERE DeviceID LIKE '%VID_" + vidStr + "%' AND DeviceID LIKE '%PID_" + pidStr + "%'"))
                 {
-                    devices = HidDevices.Enumerate(DOLPHINBAR_VID, 0x1800);
-                    _dolphinBarPresent = devices.Any();
-                }
-                if (!_dolphinBarPresent.Value)
-                {
-                    devices = HidDevices.Enumerate(DOLPHINBAR_VID, 0x1801);
-                    _dolphinBarPresent = devices.Any();
+                    foreach (var obj in searcher.Get())
+                    {
+                        Console.WriteLine("[DolphinBarHelper] Found: " + (obj["Name"] ?? "unknown"));
+                        _dolphinBarPresent = true;
+                        return true;
+                    }
                 }
 
-                Console.WriteLine(_dolphinBarPresent.Value
-                    ? "DolphinBarHelper: Mayflash DolphinBar detected via USB HID"
-                    : "DolphinBarHelper: No Mayflash DolphinBar detected");
+                // Check alternate PIDs (0x1800, 0x1801, 0x1802)
+                using (var searcher = new ManagementObjectSearcher(
+                    @"SELECT Name, DeviceID FROM Win32_PnPEntity WHERE DeviceID LIKE '%VID_" + vidStr + "%' AND (DeviceID LIKE '%PID_1800%' OR DeviceID LIKE '%PID_1801%' OR DeviceID LIKE '%PID_1802%')"))
+                {
+                    foreach (var obj in searcher.Get())
+                    {
+                        Console.WriteLine("[DolphinBarHelper] Found (alt PID): " + (obj["Name"] ?? "unknown"));
+                        _dolphinBarPresent = true;
+                        return true;
+                    }
+                }
+
+                Console.WriteLine("[DolphinBarHelper] No Mayflash DolphinBar detected via WMI");
+                _dolphinBarPresent = false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("DolphinBarHelper: Error detecting DolphinBar: " + ex.Message);
+                Console.WriteLine("[DolphinBarHelper] WMI error: " + ex.Message);
                 _dolphinBarPresent = false;
             }
 
@@ -62,46 +72,11 @@ namespace WiiTUIO
         }
 
         /// <summary>
-        /// Find all Wii Remote HID devices directly via HID enumeration.
-        /// This bypasses the Bluetooth stack entirely and works when
-        /// the DolphinBar is in Mode 4 but the CSR Bluetooth driver
-        /// isn't loaded in Windows.
-        ///
-        /// The DolphinBar exposes each Wii Remote slot as a separate
-        /// HID device with Nintendo VID/PID, even in Mode 4.
+        /// Reset cached detection (for re-detection after device changes).
         /// </summary>
-        public static List<HidDevice> FindWiiRemotesViaHID()
+        public static void ResetCache()
         {
-            var wiimotes = new List<HidDevice>();
-
-            try
-            {
-                foreach (int pid in WIIMOTE_PIDS)
-                {
-                    var devices = HidDevices.Enumerate(NINTENDO_VID, pid);
-                    foreach (var device in devices)
-                    {
-                        Console.WriteLine("DolphinBarHelper: Found Wii Remote HID: " + device.DevicePath);
-                        wiimotes.Add(device);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("DolphinBarHelper: Error enumerating Wii Remotes: " + ex.Message);
-            }
-
-            Console.WriteLine("DolphinBarHelper: Found {0} Wii Remote HID devices", wiimotes.Count);
-            return wiimotes;
-        }
-
-        /// <summary>
-        /// Get HID device paths for all detected Wii Remotes.
-        /// These can be passed to WiimoteLib if it supports path-based connection.
-        /// </summary>
-        public static List<string> GetWiimoteDevicePaths()
-        {
-            return FindWiiRemotesViaHID().Select(d => d.DevicePath).ToList();
+            _dolphinBarPresent = null;
         }
     }
 }
