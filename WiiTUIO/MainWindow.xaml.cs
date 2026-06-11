@@ -244,39 +244,40 @@ namespace WiiTUIO
             Application.Current.Exit += appWillExit;
             Application.Current.SessionEnding += windowsShutdownEvent;
 
-            wiiPair = new WiiCPP.WiiPair();
-            wiiPair.addListener(this);
-
             Settings.Default.PropertyChanged += Settings_PropertyChanged;
 
-            // Create the providers.
-            this.createProvider();
-            //this.createProviderHandler();
-
-            // Check for Mayflash DolphinBar — if present, skip WiiPair Bluetooth scanning
-            // because the Bluetooth radio enumeration disrupts the bar's internal
-            // Wii Remote connection. The DolphinBar handles pairing via its SYNC button.
+            // Check for Mayflash DolphinBar — if present, DON'T touch anything
+            // that could access HID/Bluetooth devices. Even loading WiimoteLib
+            // or creating WiiPair objects can disrupt the bar's internal connection.
             bool dolphinBarDetected = DolphinBarHelper.IsDolphinBarPresent();
 
-            if (Settings.Default.pairOnStart && !dolphinBarDetected)
+            if (!dolphinBarDetected)
             {
-                this.startupPair = true;
-                this.runWiiPair();
-            }
-            else
-            {
-                if (dolphinBarDetected)
+                // Normal startup — create Wii components
+                wiiPair = new WiiCPP.WiiPair();
+                wiiPair.addListener(this);
+                this.createProvider();
+
+                if (Settings.Default.pairOnStart)
                 {
-                    Console.WriteLine("MainWindow: DolphinBar detected — NOT starting auto-scan (prevents HID disruption)");
-                    this.tbPair2.Text = "DolphinBar detected. Connect Wiimotes using bar's SYNC button, then click Pair.";
-                    this.tbPair2.Visibility = Visibility.Visible;
-                    // Do NOT call connectProvider() — opening HID handles disrupts the bar's connection.
-                    // The user must click "Pair Wiimotes" to manually trigger connection.
+                    this.startupPair = true;
+                    this.runWiiPair();
                 }
                 else
                 {
                     this.connectProvider();
                 }
+            }
+            else
+            {
+                // DolphinBar mode: DON'T create WiiPair or MultiWiiPointerProvider.
+                // These load WiimoteLib/WiiCPP DLLs which touch HID handles and
+                // steal the device from the bar's firmware, causing disconnect.
+                Console.WriteLine("MainWindow: DolphinBar detected — deferring all HID access");
+                this.tbPair2.Text = "DolphinBar detected. Pair Wiimotes with bar's SYNC button first.";
+                this.tbPair2.Visibility = Visibility.Visible;
+                wiiPair = null;
+                // createProvider will be called when user clicks Pair Wiimotes
             }
 
             AppSettingsUC settingspanel = new AppSettingsUC();
@@ -1059,6 +1060,7 @@ namespace WiiTUIO
         /// </summary>
         private void connectProvider()
         {
+            if (this.pWiiProvider == null) return;
             if (!this.tryingToConnect)
             {
                 Launcher.Launch("Driver", "devcon", " enable \"BTHENUM*_VID*57e*_PID&0306*\"", new Action(delegate ()
@@ -1191,12 +1193,23 @@ namespace WiiTUIO
             // pairing via its SYNC button. Go straight to HID discovery.
             if (DolphinBarHelper.IsDolphinBarPresent())
             {
-                Console.WriteLine("MainWindow: DolphinBar detected — skipping Bluetooth pairing");
-                this.stopWiiPair();
-                this.pairWiimoteText.Text = "DolphinBar detected. Pair Wiimotes with the bar's SYNC button.";
+                Console.WriteLine("MainWindow: DolphinBar detected — creating provider and connecting");
+
+                // Lazily create WiiPair and provider (not done in constructor to avoid
+                // disrupting the DolphinBar's existing Wii Remote connection).
+                if (wiiPair == null)
+                {
+                    wiiPair = new WiiCPP.WiiPair();
+                    wiiPair.addListener(this);
+                }
+                if (pWiiProvider == null)
+                {
+                    this.createProvider();
+                }
+
+                this.pairWiimoteText.Text = "DolphinBar: scanning for Wii Remotes...";
                 this.pairWiimotePressSync.Visibility = Visibility.Visible;
-                this.pairProgress.IsActive = false;
-                // Connect provider to discover Wiimotes via HID
+                this.pairProgress.IsActive = true;
                 this.connectProvider();
                 return;
             }
@@ -1206,6 +1219,7 @@ namespace WiiTUIO
 
         private void runWiiPair()
         {
+            if (wiiPair == null) return;
             if (!this.wiiPairRunning)
             {
                 Dispatcher.BeginInvoke(new Action(delegate ()
@@ -1236,6 +1250,7 @@ namespace WiiTUIO
 
         private void stopWiiPair()
         {
+            if (wiiPair == null) return;
             this.wiiPairRunning = false;
             wiiPair.stop();
         }
