@@ -78,5 +78,37 @@ namespace WiiTUIO
         {
             _dolphinBarPresent = null;
         }
+
+        /// <summary>
+        /// Get HID device paths for all Nintendo Wii Remote devices
+        /// using WMI (no handles opened). Returns device instance IDs
+        /// that can be converted to HID paths.
+        /// </summary>
+        public static List<string> GetWiimoteDevicePaths()
+        {
+            var paths = new List<string>();
+
+            try
+            {
+                // Query for Nintendo HID devices via WMI
+                using (var searcher = new ManagementObjectSearcher(
+                    @"SELECT Name, DeviceID FROM Win32_PnPEntity WHERE DeviceID LIKE '%VID_057E%' AND (DeviceID LIKE '%PID_0306%' OR DeviceID LIKE '%PID_0330%')"))
+                {
+                    foreach (var obj in searcher.Get())
+                    {
+                        string deviceId = obj["DeviceID"]?.ToString() ?? "";
+                        Console.WriteLine("[DolphinBarHelper] Wii Remote found via WMI: " + (obj["Name"] ?? "unknown") + " ID=" + deviceId);
+                        paths.Add(deviceId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[DolphinBarHelper] WMI Wiimote enum error: " + ex.Message);
+            }
+
+            Console.WriteLine("[DolphinBarHelper] Found {0} Wii Remote device(s) via WMI", paths.Count);
+            return paths;
+        }
     }
 }
