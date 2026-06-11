@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Win32;
+using HidLibrary;
 
 namespace WiiTUIO
 {
     /// <summary>
-    /// Helper class to detect Mayflash DolphinBar WITHOUT opening any
-    /// device handles. Uses direct registry enumeration only.
+    /// Helper class to detect Mayflash DolphinBar and work around
+    /// the disconnect issue. Uses registry for bar detection (zero handles)
+    /// and HidLibrary for safe device path discovery (ACCESS_NONE only).
     /// </summary>
     public static class DolphinBarHelper
     {
@@ -25,33 +28,12 @@ namespace WiiTUIO
             {
                 Console.WriteLine("[DolphinBarHelper] Scanning registry for Mayflash devices (zero handles)...");
 
-                // Check HID device registry: HKLM\SYSTEM\CurrentControlSet\Enum\HID
-                if (FindInRegistry(@"SYSTEM\CurrentControlSet\Enum\HID", "VID_0079", "PID_1803"))
+                if (FindMayflashInRegistry(@"SYSTEM\CurrentControlSet\Enum\HID") ||
+                    FindMayflashInRegistry(@"SYSTEM\CurrentControlSet\Enum\USB"))
                 {
-                    Console.WriteLine("[DolphinBarHelper] Found Mayflash in HID registry");
+                    Console.WriteLine("[DolphinBarHelper] Mayflash DolphinBar detected via registry");
                     _dolphinBarPresent = true;
                     return true;
-                }
-
-                // Check USB device registry: HKLM\SYSTEM\CurrentControlSet\Enum\USB
-                if (FindInRegistry(@"SYSTEM\CurrentControlSet\Enum\USB", "VID_0079", "PID_1803"))
-                {
-                    Console.WriteLine("[DolphinBarHelper] Found Mayflash in USB registry");
-                    _dolphinBarPresent = true;
-                    return true;
-                }
-
-                // Check alternate PIDs
-                string[] altPids = { "PID_1800", "PID_1801", "PID_1802" };
-                foreach (var pid in altPids)
-                {
-                    if (FindInRegistry(@"SYSTEM\CurrentControlSet\Enum\HID", "VID_0079", pid) ||
-                        FindInRegistry(@"SYSTEM\CurrentControlSet\Enum\USB", "VID_0079", pid))
-                    {
-                        Console.WriteLine("[DolphinBarHelper] Found Mayflash with " + pid);
-                        _dolphinBarPresent = true;
-                        return true;
-                    }
                 }
 
                 Console.WriteLine("[DolphinBarHelper] No Mayflash found in registry");
@@ -66,22 +48,21 @@ namespace WiiTUIO
             return _dolphinBarPresent.Value;
         }
 
-        private static bool FindInRegistry(string basePath, string vidPattern, string pidPattern)
+        private static bool FindMayflashInRegistry(string basePath)
         {
             try
             {
                 using (var baseKey = Registry.LocalMachine.OpenSubKey(basePath))
                 {
-                    if (baseKey == null)
-                    {
-                        Console.WriteLine("[DolphinBarHelper] Registry key not found: " + basePath);
-                        return false;
-                    }
+                    if (baseKey == null) return false;
 
                     foreach (var subKeyName in baseKey.GetSubKeyNames())
                     {
-                        if (subKeyName.IndexOf(vidPattern, StringComparison.OrdinalIgnoreCase) >= 0 &&
-                            subKeyName.IndexOf(pidPattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                        if (subKeyName.IndexOf("VID_0079", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                            (subKeyName.IndexOf("PID_1800", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             subKeyName.IndexOf("PID_1801", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             subKeyName.IndexOf("PID_1802", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             subKeyName.IndexOf("PID_1803", StringComparison.OrdinalIgnoreCase) >= 0))
                         {
                             Console.WriteLine("[DolphinBarHelper] Match: " + subKeyName);
                             return true;
@@ -105,34 +86,49 @@ namespace WiiTUIO
         }
 
         /// <summary>
-        /// Get Wii Remote device paths from registry (no handles opened).
+        /// Get HID device paths for Nintendo Wii Remote devices.
+        /// Uses HidLibrary.Enumerate() which opens handles with ACCESS_NONE
+        /// (read-only metadata, no disruption). Returns full HID paths like
+        /// \\?\hid#vid_057e&pid_0306&mi_00#...
         /// </summary>
         public static List<string> GetWiimoteDevicePaths()
         {
             var paths = new List<string>();
+
             try
             {
-                using (var baseKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\HID"))
-                {
-                    if (baseKey == null) return paths;
+                Console.WriteLine("[DolphinBarHelper] Enumerating HID devices for Wii Remotes (ACCESS_NONE)...");
 
-                    foreach (var subKeyName in baseKey.GetSubKeyNames())
+                // Enumerate ALL HID devices, filter by VID/PID.
+                // This opens with ACCESS_NONE (0), not ReadWrite — safe.
+                var devices = HidDevices.Enumerate(0x057E, 0x0306);
+                foreach (var device in devices)
+                {
+                    Console.WriteLine("[DolphinBarHelper] Wii Remote HID path: " + device.DevicePath);
+                    paths.Add(device.DevicePath);
+
+                    // Cleanup: dispose the HidDevice (closes the ACCESS_NONE handle)
+                    try { device.CloseDevice(); } catch { }
+                }
+
+                // Also check Wii Remote Plus PID (0x0330)
+                var devicesTR = HidDevices.Enumerate(0x057E, 0x0330);
+                foreach (var device in devicesTR)
+                {
+                    Console.WriteLine("[DolphinBarHelper] Wii Remote Plus HID path: " + device.DevicePath);
+                    if (!paths.Contains(device.DevicePath))
                     {
-                        if (subKeyName.IndexOf("VID_057E", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                            (subKeyName.IndexOf("PID_0306", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                             subKeyName.IndexOf("PID_0330", StringComparison.OrdinalIgnoreCase) >= 0))
-                        {
-                            Console.WriteLine("[DolphinBarHelper] Wii Remote registry entry: " + subKeyName);
-                            paths.Add(subKeyName);
-                        }
+                        paths.Add(device.DevicePath);
+                        try { device.CloseDevice(); } catch { }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("[DolphinBarHelper] Error finding Wiimotes in registry: " + ex.Message);
+                Console.WriteLine("[DolphinBarHelper] Error enumerating Wiimotes: " + ex.Message);
             }
-            Console.WriteLine("[DolphinBarHelper] Found {0} Wii Remote entries in registry", paths.Count);
+
+            Console.WriteLine("[DolphinBarHelper] Found {0} Wii Remote HID paths", paths.Count);
             return paths;
         }
     }

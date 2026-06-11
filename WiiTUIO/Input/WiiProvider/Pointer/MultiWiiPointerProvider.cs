@@ -235,31 +235,62 @@ namespace WiiTUIO.Provider
                     }
                 }
 
+                bool isDolphinBar = DolphinBarHelper.IsDolphinBarPresent();
                 this.pWC.Clear();
-                Console.WriteLine("MultiWiiPointerProvider: Scanning for Wii Remotes via HID...");
-                this.pWC.FindAllWiimotes();
-                Console.WriteLine("MultiWiiPointerProvider: Found {0} Wii Remote(s) via WiimoteLib", this.pWC.Count);
 
-                // If WiimoteLib found nothing and DolphinBar is present,
-                // the CSR Bluetooth driver may not be loaded. Try direct HID enumeration
-                // for Nintendo devices as a fallback.
-                if (this.pWC.Count == 0 && DolphinBarHelper.IsDolphinBarPresent())
+                if (isDolphinBar)
                 {
-                    Console.WriteLine("MultiWiiPointerProvider: DolphinBar detected but no Wii Remotes found. Trying direct HID...");
-                    var hidPaths = DolphinBarHelper.GetWiimoteDevicePaths();
-                    Console.WriteLine("MultiWiiPointerProvider: Direct HID found {0} devices", hidPaths.Count);
+                    // DolphinBar mode: skip FindAllWiimotes (opens ALL 4 HID slots and disrupts
+                    // the bar's connection). Instead, use reflection to create Wiimote objects
+                    // directly for each Wii Remote HID path from the registry.
+                    Console.WriteLine("MultiWiiPointerProvider: DolphinBar mode — using reflection to connect directly");
 
-                    // We can't create Wiimote objects directly (internal constructor),
-                    // but we can try to force WiimoteLib to rescan. The Wii Remote might
-                    // need a moment after being paired via the bar's SYNC button.
-                    // Wait and retry once.
-                    if (hidPaths.Count > 0)
+                    var hidPaths = DolphinBarHelper.GetWiimoteDevicePaths();
+                    if (hidPaths.Count == 0)
                     {
-                        Console.WriteLine("MultiWiiPointerProvider: Wii Remote HID devices found, retrying WiimoteLib scan...");
-                        System.Threading.Thread.Sleep(500);
+                        // Registry might not have HID paths, try WiimoteLib as fallback
+                        Console.WriteLine("MultiWiiPointerProvider: No registry paths found, scanning all HID...");
                         this.pWC.FindAllWiimotes();
-                        Console.WriteLine("MultiWiiPointerProvider: Retry found {0} Wii Remote(s)", this.pWC.Count);
                     }
+                    else
+                    {
+                        // Use reflection to call the internal Wiimote(string devicePath) constructor
+                        var ctor = typeof(Wiimote).GetConstructor(
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                            null, new Type[] { typeof(string) }, null);
+
+                        if (ctor == null)
+                        {
+                            Console.WriteLine("MultiWiiPointerProvider: ERROR — Wiimote(string) constructor not found!");
+                            // Fallback to normal scan
+                            this.pWC.FindAllWiimotes();
+                        }
+                        else
+                        {
+                            Console.WriteLine("MultiWiiPointerProvider: Creating Wiimote objects via reflection for {0} paths", hidPaths.Count);
+                            foreach (var devicePath in hidPaths)
+                            {
+                                try
+                                {
+                                    var wiimote = (Wiimote)ctor.Invoke(new object[] { devicePath });
+                                    this.pWC.Add(wiimote);
+                                    Console.WriteLine("MultiWiiPointerProvider: Created Wiimote for " + devicePath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("MultiWiiPointerProvider: Failed to create Wiimote: " + ex.Message);
+                                }
+                            }
+                        }
+                    }
+
+                    Console.WriteLine("MultiWiiPointerProvider: DolphinBar mode — {0} Wiimotes to connect", this.pWC.Count);
+                }
+                else
+                {
+                    Console.WriteLine("MultiWiiPointerProvider: Scanning for Wii Remotes via HID...");
+                    this.pWC.FindAllWiimotes();
+                    Console.WriteLine("MultiWiiPointerProvider: Found {0} Wii Remote(s) via WiimoteLib", this.pWC.Count);
                 }
 
                 foreach (Wiimote pDevice in pWC)
