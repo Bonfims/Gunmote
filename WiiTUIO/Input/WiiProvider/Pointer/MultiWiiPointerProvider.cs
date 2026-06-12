@@ -299,7 +299,43 @@ namespace WiiTUIO.Provider
                     {
                         if (!pWiimoteMap.Keys.Contains(pDevice.HIDDevicePath))
                         {
-                            this.connectWiimote(pDevice);
+                            if (isDolphinBar)
+                            {
+                                // DolphinBar Mode 4 with parallel Wii Remote:
+                                // WiimoteLib's ReadData fails on first attempt because the
+                                // HID path needs time to stabilize. Retry Connect() with
+                                // increasing delays, like Wii Mote Hooks does.
+                                bool connected = false;
+                                for (int retry = 0; retry < 8 && !connected; retry++)
+                                {
+                                    if (retry > 0)
+                                    {
+                                        // Close handle so bar can recover, then wait
+                                        try { pDevice.Disconnect(); } catch { }
+                                        int waitMs = 2000 + (retry * 1000); // 2s, 3s, 4s, ...
+                                        Console.WriteLine("MultiWiiPointerProvider: Retry {0}/{1} - waiting {2}ms...", retry + 1, 8, waitMs);
+                                        System.Threading.Thread.Sleep(waitMs);
+                                    }
+                                    try
+                                    {
+                                        this.connectWiimote(pDevice);
+                                        connected = true;
+                                        Console.WriteLine("MultiWiiPointerProvider: SUCCESS on attempt {0}!", retry + 1);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine("MultiWiiPointerProvider: Attempt {0} failed: {1}", retry + 1, ex.Message);
+                                        if (retry >= 7)
+                                        {
+                                            pErrorReport = ex;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                this.connectWiimote(pDevice);
+                            }
                         }
                     }
                     // If something went wrong - notify the user..
