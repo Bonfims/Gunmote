@@ -174,10 +174,7 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>.\VMultiDllWrapper.dll</HintPath>
     </Reference>
-    <Reference Include="WiimoteLib, Version=1.7.0.0, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>.\WiimoteLib.dll</HintPath>
-    </Reference>
+    <!-- WiimoteLib built from source (modified for parallel Wii Remote support) -->
     <Reference Include="WindowsBase">
       <RequiredTargetFramework>3.0</RequiredTargetFramework>
     </Reference>
@@ -248,6 +245,12 @@
     <Compile Include="Output\Handlers\Cursor\D3DCursorWindow.cs" />
     <Compile Include="Input\WiiProvider\Pointer\WiimoteStatus.cs" />
     <Compile Include="Input\WiiProvider\Keymap\WiiKeyMap.cs" />
+    <!-- Modified WiimoteLib source (built-in, replaces WiimoteLib.dll) -->
+    <Compile Include="WiimoteLib\DataTypes.cs" />
+    <Compile Include="WiimoteLib\Events.cs" />
+    <Compile Include="WiimoteLib\HIDImports.cs" />
+    <Compile Include="WiimoteLib\Wiimote.cs" />
+    <Compile Include="WiimoteLib\WiimoteCollection.cs" />
     <Compile Include="Output\Handlers\MouseHandler.cs" />
     <Compile Include="Output\Handlers\WiimoteHandler.cs" />
     <Compile Include="Output\Handlers\Xinput\ViGEmBus360Device.cs" />
