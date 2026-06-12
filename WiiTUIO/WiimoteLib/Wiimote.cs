@@ -1316,6 +1316,15 @@ namespace WiimoteLib
 
 		#region IDisposable Members
 
+		// Speaker methods — stubs for Gunmote compatibility.
+		// Audio playback through Wiimote speaker is notoriously unreliable
+		// on PC Bluetooth and is not needed for lightgun functionality.
+		public void EnableSpeaker() { }
+		public void DisableSpeaker() { }
+		public void SetSpeakerMuteState(bool muted) { }
+		public void StopPlayback() { }
+		public void StartPlayback(byte[] soundData) { }
+
 		/// <summary>
 		/// Dispose Wiimote
 		/// </summary>

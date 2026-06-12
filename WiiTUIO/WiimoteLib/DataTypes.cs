@@ -202,6 +202,10 @@ namespace WiimoteLib
 		[DataMember]
 		public DrumsState DrumsState;
 		/// <summary>
+		/// Current Wiimote speaker state (added for Gunmote compatibility)
+		/// </summary>
+		public SpeakerState SpeakerState = new SpeakerState();
+		/// <summary>
 		/// Current state of the Wii Fit Balance Board
 		/// </summary>
 		public BalanceBoardState BalanceBoardState;
@@ -903,5 +907,25 @@ namespace WiimoteLib
 		/// Guitar Hero: World Tour guitar controller
 		/// </summary>
 		GuitarHeroWorldTour
+	}
+
+	/// <summary>
+	/// Speaker data format (added for Gunmote compatibility)
+	/// </summary>
+	public enum SpeakerDataFormat : byte
+	{
+		PCM = 0,
+		ADPCM = 1
+	}
+
+	/// <summary>
+	/// Current state of the Wiimote speaker (added for Gunmote compatibility)
+	/// </summary>
+	public class SpeakerState
+	{
+		public SpeakerDataFormat DataFormat = SpeakerDataFormat.PCM;
+		public int SampleRate = 6000;
+		public byte Volume = 0xFF;
+		public bool Muted = false;
 	}
 }
