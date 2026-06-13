@@ -238,6 +238,14 @@ namespace WiiTUIO.Provider
                 }
 
                 isDolphinBar = DolphinBarHelper.IsDolphinBarPresent();
+
+                // Dispose old Wiimotes before clearing — matches Wii Mote Hooks GClass1.Dispose
+                // which closes all GClass12 handles on restart. Without this, old FileStream
+                // and SafeFileHandle instances keep HID slots locked and prevent reconnection.
+                foreach (Wiimote oldDevice in this.pWC)
+                {
+                    try { oldDevice.Disconnect(); } catch { }
+                }
                 this.pWC.Clear();
 
                 if (isDolphinBar)
