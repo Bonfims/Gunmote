@@ -1259,10 +1259,12 @@ namespace WiimoteLib
 				uint reportLength = (uint)(mUseFullReports ? REPORT_LENGTH : GetActualReportLength());
 				bool flag = HIDImports.WriteFile(mHandle.DangerousGetHandle(), mBuff, reportLength, out bytesWritten, ref mWriteOverlapped);
 				uint lastError = HIDImports.GetLastError();
-				// ERROR_IO_PENDING (997) is normal for overlapped I/O
+				// ERROR_IO_PENDING (997) is normal for overlapped I/O — operation is in progress
+				// Any other error means the device is not functioning
 				if (!flag && lastError != 997U)
 				{
-					Console.WriteLine("WriteFile failed: error " + lastError);
+					Console.WriteLine("WriteFile failed immediately: error " + lastError);
+					throw new IOException("WriteFile failed: error " + lastError, new System.ComponentModel.Win32Exception((int)lastError));
 				}
 			}
 			else if (mWriteMethodEnum == 1) // HidD_SetOutputReport

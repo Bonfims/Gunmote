@@ -157,6 +157,8 @@ namespace WiiTUIO.Provider
             //this.teardownWiimoteConnection();
 
             pErrorReport = null;
+            bool isDolphinBar = false;
+            bool anyConnected = false;
 
             try
             {
@@ -235,7 +237,7 @@ namespace WiiTUIO.Provider
                     }
                 }
 
-                bool isDolphinBar = DolphinBarHelper.IsDolphinBarPresent();
+                isDolphinBar = DolphinBarHelper.IsDolphinBarPresent();
                 this.pWC.Clear();
 
                 if (isDolphinBar)
@@ -297,7 +299,7 @@ namespace WiiTUIO.Provider
                 // after first success. Opening empty DolphinBar slots may
                 // disrupt the slot with the active Wii Remote.
                 var devices = new List<Wiimote>(pWC);
-                bool anyConnected = false;
+                anyConnected = false;
                 if (isDolphinBar)
                 {
                     devices.Reverse(); // Try mi_03 first, mi_00 last
@@ -321,20 +323,12 @@ namespace WiiTUIO.Provider
                                     this.connectWiimote(pDevice);
                                     anyConnected = true;
                                 }
-                                catch (WiimoteLib.WiimoteException ex)
-                                {
-                                    // WiimoteException = timeout/read error → full restart
-                                    // (matches Wii Mote Hooks GException1)
-                                    Console.WriteLine("MultiWiiPointerProvider: Timeout on {0}, restarting: {1}", pDevice.HIDDevicePath, ex.Message);
-                                    try { pDevice.Disconnect(); } catch { }
-                                    pErrorReport = ex;
-                                    return false;
-                                }
                                 catch (Exception ex)
                                 {
-                                    // Other errors (empty DolphinBar slot, device not functioning) →
-                                    // dispose and try next device
-                                    // (matches Wii Mote Hooks generic catch)
+                                    // DolphinBar mode: ALL errors on a slot mean "empty slot" —
+                                    // timeout or device-not-functioning are both normal for
+                                    // slots with no Wii Remote paired. Dispose and try next.
+                                    // Only restart (return false) if no slots worked at all.
                                     Console.WriteLine("MultiWiiPointerProvider: Skipping {0}: {1}", pDevice.HIDDevicePath, ex.Message);
                                     try { pDevice.Disconnect(); } catch { }
                                     // Continue to next device
@@ -370,6 +364,15 @@ namespace WiiTUIO.Provider
             }
 
             this.connectionMutex.ReleaseMutex();
+
+            // DolphinBar mode: if we tried all 4 slots and none worked,
+            // report the error and trigger a retry on next timer tick.
+            if (isDolphinBar && !anyConnected)
+            {
+                Console.WriteLine("MultiWiiPointerProvider: No Wiimote found on any DolphinBar slot, will retry...");
+                pErrorReport = new Exception("No Wiimote responded on any DolphinBar slot");
+                return false;
+            }
 
             if (pErrorReport != null)
             {
