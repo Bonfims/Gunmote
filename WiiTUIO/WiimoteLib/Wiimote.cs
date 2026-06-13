@@ -98,9 +98,9 @@ namespace WiimoteLib
 		private readonly AutoResetEvent mStatusDone = new AutoResetEvent(false);
 
 		// use a different method to write reports
-		// 0 = FileStream.Write (default), 1 = HidD_SetOutputReport, 2 = IOCTL, -1 = unset
+		// 0 = FileStream.Write, 1 = HidD_SetOutputReport (default, matches Unity-Wiimote/STACK_MICROSOFT), 2 = IOCTL, -1 = unset
 		private int mWriteMethod = -1;
-		private bool mAltWriteMethod;
+		private bool mAltWriteMethod = true; // Start with HidD_SetOutputReport (like Unity-Wiimote "new" method)
 
 		// HID device path of this Wiimote
 		private string mDevicePath = string.Empty;
