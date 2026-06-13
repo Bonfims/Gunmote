@@ -1155,11 +1155,10 @@ namespace WiimoteLib
 			Debug.WriteLine("WriteReport: " + mBuff[0].ToString("x") + " method=" + mWriteMethod);
 
 			bool written = false;
-
-			// Determine which method to try first
 			int startMethod = mWriteMethod >= 0 ? mWriteMethod : (mAltWriteMethod ? 1 : 0);
+			// Wii Mote Hooks uses SHORT reports when not in legacy mode
+			bool useShortReports = (startMethod != 2); // short for WriteFile & SetOutputReport, 22-byte for FileStream.Write
 
-			// Try up to 3 methods (0=FileStream, 1=HidD_SetOutputReport, 2=IOCTL)
 			for (int method = startMethod; method <= 2 && !written; method++)
 			{
 				try
@@ -1172,17 +1171,15 @@ namespace WiimoteLib
 								mStream.Write(mBuff, 0, REPORT_LENGTH);
 								written = true;
 								mWriteMethod = 0;
-								Debug.WriteLine("WriteReport: FileStream OK");
 							}
 							break;
 						case 1:
 							written = HIDImports.HidD_SetOutputReport(
-								this.mHandle.DangerousGetHandle(), mBuff, (uint)mBuff.Length);
+								this.mHandle.DangerousGetHandle(), mBuff, (uint)(useShortReports ? GetActualReportLength() : mBuff.Length));
 							if (written)
 							{
 								mWriteMethod = 1;
 								mAltWriteMethod = true;
-								Debug.WriteLine("WriteReport: HidD_SetOutputReport OK");
 							}
 							break;
 						case 2:
@@ -1190,7 +1187,7 @@ namespace WiimoteLib
 							written = HIDImports.DeviceIoControl(
 								this.mHandle.DangerousGetHandle(),
 								HIDImports.IOCTL_HID_SET_OUTPUT_REPORT,
-								mBuff, mBuff.Length,
+								mBuff, useShortReports ? GetActualReportLength() : mBuff.Length,
 								null, 0,
 								out bytesReturned,
 								IntPtr.Zero);
@@ -1198,7 +1195,6 @@ namespace WiimoteLib
 							{
 								mWriteMethod = 2;
 								mAltWriteMethod = true;
-								Debug.WriteLine("WriteReport: IOCTL OK");
 							}
 							break;
 					}
@@ -1209,10 +1205,7 @@ namespace WiimoteLib
 				}
 
 				if (!written && method < 2)
-				{
-					// Brief pause before trying next method (like Wii Mote Hooks does)
 					System.Threading.Thread.Sleep(50);
-				}
 			}
 
 			if (!written)
@@ -1223,7 +1216,27 @@ namespace WiimoteLib
 				Debug.WriteLine("Wait");
 				if(!mWriteDone.WaitOne(1000, false))
 					Debug.WriteLine("Wait failed");
-				//throw new WiimoteException("Error writing data to Wiimote...is it connected?");
+			}
+		}
+
+		// Wii Mote Hooks uses short reports: 2 bytes for LEDs, 3 for SetReportType,
+		// 7 for ReadMemory, 22 for WriteMemory. This returns the actual needed length.
+		private int GetActualReportLength()
+		{
+			byte reportType = mBuff[0];
+			switch (reportType)
+			{
+				case (byte)OutputReport.LEDs:       return 2;  // LED report is 2 bytes
+				case (byte)OutputReport.Type:       return 3;  // SetReportType is 3 bytes
+				case (byte)OutputReport.IR:         return 2;  // IR enable is 2 bytes
+				case (byte)OutputReport.IR2:        return 2;  // IR2 is 2 bytes
+				case (byte)OutputReport.Status:     return 2;  // Status request is 2 bytes
+				case (byte)OutputReport.ReadMemory: return 7;  // Read memory is 7 bytes
+				case (byte)OutputReport.WriteMemory: return 22; // Write memory is full 22 bytes
+				case (byte)OutputReport.SpeakerEnable: return 2;
+				case (byte)OutputReport.SpeakerMute:  return 2;
+				case (byte)OutputReport.SpeakerData:  return 22;
+				default: return REPORT_LENGTH; // fallback to full length
 			}
 		}
 
