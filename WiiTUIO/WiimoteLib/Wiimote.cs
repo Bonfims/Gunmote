@@ -97,16 +97,29 @@ namespace WiimoteLib
 		// event for status report
 		private readonly AutoResetEvent mStatusDone = new AutoResetEvent(false);
 
-		// use a different method to write reports
-		// 0 = FileStream.Write, 1 = HidD_SetOutputReport (default, matches Unity-Wiimote/STACK_MICROSOFT), 2 = IOCTL, -1 = unset
-		private int mWriteMethod = -1;
-		private bool mAltWriteMethod = false; // Start with WriteFile (matches Wii Mote Hooks default for Win8+) (like Unity-Wiimote "new" method)
+		// Write method — matches Wii Mote Hooks GEnum16
+		// 0 = WriteFile (kernel32, overlapped — Win8+ default)
+		// 1 = HidD_SetOutputReport (legacy Alt1)
+		// 2 = FileStream.Write (legacy Alt2)
+		private int mWriteMethodEnum = 0; // Start with WriteFile (matches Wii Mote Hooks Win8+ default)
+
+		// Matches Wii Mote Hooks Boolean_1 — when true, uses full 22-byte reports; when false, short reports
+		private bool mUseFullReports = false; // false = short reports (Win8+ default with WriteFile)
+
+		// Matches Wii Mote Hooks Boolean_2 — when true, uses FileShare.None (exclusive access) for legacy mode
+		private bool mExclusiveAccess = false;
+
+		// For overlapped WriteFile (matches Wii Mote Hooks nativeOverlapped_0)
+		private NativeOverlapped mWriteOverlapped;
 
 		// HID device path of this Wiimote
 		private string mDevicePath = string.Empty;
 
 		// unique ID
 		private readonly Guid mID = Guid.NewGuid();
+
+		// Flag: was this device opened as a legacy RVL-CNT-01-TR (0x0330)?
+		private bool mIsNewWiimote;
 
 		// delegate used for enumerating found Wiimotes
 		internal delegate bool WiimoteFoundDelegate(string devicePath);
@@ -230,15 +243,14 @@ namespace WiimoteLib
 
 		private void OpenWiimoteDeviceHandle(string devicePath)
 		{
-			// open a read/write handle to our device using the DevicePath returned
+			// Open with FILE_FLAG_OVERLAPPED — matches Wii Mote Hooks GClass12.smethod_0
 			mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
 
-				// Wii Mote Hooks uses FileShare.None (exclusive access) for parallel Wii Remotes.
-				// If exclusive fails, fall back to shared access.
-				if (mHandle.IsInvalid)
-				{
-					mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
-				}
+			if (mHandle.IsInvalid)
+			{
+				mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
+			}
+
 			// create an attributes struct and initialize the size
 			HIDImports.HIDD_ATTRIBUTES attrib = new HIDImports.HIDD_ATTRIBUTES();
 			attrib.Size = Marshal.SizeOf(attrib);
@@ -247,35 +259,115 @@ namespace WiimoteLib
 			if(HIDImports.HidD_GetAttributes(mHandle.DangerousGetHandle(), ref attrib))
 			{
 				// if the vendor and product IDs match up
-				if(attrib.VendorID == VID && attrib.ProductID == PID)
+				if(attrib.VendorID == VID && (attrib.ProductID == PID || attrib.ProductID == 0x0330))
 				{
-					// create a nice .NET FileStream wrapping the handle above
+					if (attrib.ProductID == 0x0330)
+					{
+						mIsNewWiimote = true;
+						Debug.WriteLine("Device ID: 0x0330 (RVL-CNT-01-TR)");
+					}
+					else
+					{
+						Debug.WriteLine("Device ID: 0x0306 (RVL-CNT-01)");
+					}
+
+					// create async FileStream — matches Wii Mote Hooks: buffer 22, async=true
 					mStream = new FileStream(mHandle, FileAccess.ReadWrite, REPORT_LENGTH, true);
 
-					// start an async read operation on it
+					// start async read — matches Wii Mote Hooks method_8
 					BeginAsyncRead();
 
-					// read the calibration info from the controller
-					try
-					{
-						ReadWiimoteCalibration();
-					}
-					catch
-					{
-						// if we fail above, try the alternate HID writes
-						mAltWriteMethod = true;
-						ReadWiimoteCalibration();
-					}
+					// Test send-data method with fallback — matches Wii Mote Hooks method_3
+					TrySendDataMethod();
 
-					// force a status check to get the state of any extensions plugged in at startup
+					// read calibration — matches Wii Mote Hooks method_26
+					ReadWiimoteCalibration();
+
+					// force a status check — matches Wii Mote Hooks method_31
 					GetStatus();
 				}
 				else
 				{
 					// otherwise this isn't the controller, so close up the file handle
-					mHandle.Close();				
+					mHandle.Close();
 					throw new WiimoteException("Attempted to open a non-Wiimote device.");
 				}
+			}
+		}
+
+		/// <summary>
+		/// Test the send-data method by reading 7 bytes from address 0x0016 (calibration).
+		/// If it fails, change write method + report size and retry.
+		/// Matches Wii Mote Hooks GClass12.method_3 exactly.
+		/// </summary>
+		private void TrySendDataMethod()
+		{
+			try
+			{
+				// Try with current method first
+				ReadData(0x0016, 7);
+			}
+			catch
+			{
+				Debug.WriteLine("The current send-data method failed. Trying another one.");
+
+				if (mWriteMethodEnum == 0) // WriteFile failed → try SetOutputReport (Alt1)
+				{
+					mWriteMethodEnum = 1;
+					mUseFullReports = true;
+					mExclusiveAccess = false;
+					try
+					{
+						ReadData(0x0016, 7);
+						return;
+					}
+					catch
+					{
+						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						mWriteMethodEnum = 2; // FileStream.Write (Alt2, legacy)
+						mUseFullReports = true;
+						mExclusiveAccess = false;
+					}
+				}
+				else if (mWriteMethodEnum == 2) // FileStream.Write failed → try SetOutputReport
+				{
+					mWriteMethodEnum = 1;
+					mUseFullReports = true;
+					mExclusiveAccess = false;
+					try
+					{
+						ReadData(0x0016, 7);
+						return;
+					}
+					catch
+					{
+						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						mWriteMethodEnum = 0; // WriteFile
+						mUseFullReports = false;
+						mExclusiveAccess = true;
+					}
+				}
+				else if (mWriteMethodEnum == 1) // SetOutputReport failed → try WriteFile
+				{
+					mWriteMethodEnum = 0;
+					mUseFullReports = false;
+					mExclusiveAccess = false;
+					try
+					{
+						ReadData(0x0016, 7);
+						return;
+					}
+					catch
+					{
+						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						mWriteMethodEnum = 2; // FileStream.Write
+						mUseFullReports = true;
+						mExclusiveAccess = false;
+					}
+				}
+
+				// Last resort: try with whatever method we ended up with
+				ReadData(0x0016, 7);
 			}
 		}
 
@@ -1154,76 +1246,39 @@ namespace WiimoteLib
 		}
 
 		/// <summary>
-		/// Write a report to the Wiimote
+		/// Write a report to the Wiimote — matches Wii Mote Hooks GClass12.method_35
 		/// </summary>
 		private void WriteReport()
 		{
-			Debug.WriteLine("WriteReport: " + mBuff[0].ToString("x") + " method=" + mWriteMethod);
+			Debug.WriteLine("WriteReport: " + mBuff[0].ToString("x") + " method=" + mWriteMethodEnum + " fullRpt=" + mUseFullReports);
 
-			bool written = false;
-			int startMethod = mWriteMethod >= 0 ? mWriteMethod : (mAltWriteMethod ? 1 : 0);
-			// Wii Mote Hooks uses SHORT reports when not in legacy mode
-			bool useShortReports = (startMethod != 2); // short for WriteFile & SetOutputReport, 22-byte for FileStream.Write
-
-			for (int method = startMethod; method <= 2 && !written; method++)
+			if (mWriteMethodEnum == 0) // WriteFile (kernel32 overlapped)
 			{
-				try
+				uint bytesWritten;
+				uint reportLength = (uint)(mUseFullReports ? REPORT_LENGTH : GetActualReportLength());
+				bool flag = HIDImports.WriteFile(mHandle.DangerousGetHandle(), mBuff, reportLength, out bytesWritten, ref mWriteOverlapped);
+				uint lastError = HIDImports.GetLastError();
+				// ERROR_IO_PENDING (997) is normal for overlapped I/O
+				if (!flag && lastError != 997U)
 				{
-					switch (method)
-					{
-						case 0:
-							{
-								uint bytesWritten;
-								written = HIDImports.WriteFile(
-									this.mHandle.DangerousGetHandle(), mBuff,
-									(uint)(useShortReports ? GetActualReportLength() : REPORT_LENGTH),
-									out bytesWritten, IntPtr.Zero);
-								if (written) mWriteMethod = 0;
-								break;
-							}
-						case 1:
-							written = HIDImports.HidD_SetOutputReport(
-								this.mHandle.DangerousGetHandle(), mBuff, (uint)(useShortReports ? GetActualReportLength() : mBuff.Length));
-							if (written)
-							{
-								mWriteMethod = 1;
-								mAltWriteMethod = true;
-							}
-							break;
-						case 2:
-							int bytesReturned;
-							written = HIDImports.DeviceIoControl(
-								this.mHandle.DangerousGetHandle(),
-								HIDImports.IOCTL_HID_SET_OUTPUT_REPORT,
-								mBuff, useShortReports ? GetActualReportLength() : mBuff.Length,
-								null, 0,
-								out bytesReturned,
-								IntPtr.Zero);
-							if (written)
-							{
-								mWriteMethod = 2;
-								mAltWriteMethod = true;
-							}
-							break;
-					}
+					Debug.WriteLine("WriteFile failed: error " + lastError);
 				}
-				catch (Exception ex)
-				{
-					Debug.WriteLine("WriteReport method " + method + " failed: " + ex.Message);
-				}
-
-				if (!written && method < 2)
-					System.Threading.Thread.Sleep(50);
+			}
+			else if (mWriteMethodEnum == 1) // HidD_SetOutputReport
+			{
+				uint reportLength = (uint)(mUseFullReports ? REPORT_LENGTH : GetActualReportLength());
+				HIDImports.HidD_SetOutputReport(mHandle.DangerousGetHandle(), mBuff, reportLength);
+			}
+			else if (mWriteMethodEnum == 2) // FileStream.Write (legacy, always 22 bytes)
+			{
+				mStream.Write(mBuff, 0, REPORT_LENGTH);
 			}
 
-			if (!written)
-				Debug.WriteLine("WriteReport: ALL methods failed!");
-
-			if(mBuff[0] == (byte)OutputReport.WriteMemory)
+			// For WriteMemory commands, wait for the ACK
+			if (mBuff[0] == (byte)OutputReport.WriteMemory)
 			{
-				Debug.WriteLine("Wait");
-				if(!mWriteDone.WaitOne(2000, false)) // 2s timeout (was 1s, parallel Wii Remotes may need more time)
-					Debug.WriteLine("Wait failed");
+				if (!mWriteDone.WaitOne(1000, false))
+					Debug.WriteLine("WriteDone wait failed");
 			}
 		}
 

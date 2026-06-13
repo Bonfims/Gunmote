@@ -107,29 +107,24 @@ namespace WiimoteLib
 			byte[] lpReportBuffer,
 			uint ReportBufferLength);
 
-		// Direct WriteFile — Wii Mote Hooks "New" method uses this instead of FileStream
-		[DllImport("kernel32.dll", SetLastError = true)]
+		// Overlapped WriteFile — matches Wii Mote Hooks GClass9
+		[DllImport("kernel32.dll")]
 		internal extern static bool WriteFile(
 			IntPtr hFile,
 			byte[] lpBuffer,
 			uint nNumberOfBytesToWrite,
 			out uint lpNumberOfBytesWritten,
-			IntPtr lpOverlapped);
+			[In] ref System.Threading.NativeOverlapped lpOverlapped);
 
-		// IOCTL for low-level HID output report — necessary for some
-		// parallel/third-party Wii Remotes (like Wii Mote Hooks "Alt2" method)
-		internal const int IOCTL_HID_SET_OUTPUT_REPORT = 0xB0195;
+		[DllImport("kernel32.dll")]
+		internal extern static uint GetLastError();
 
 		[DllImport("kernel32.dll", SetLastError = true)]
-		internal extern static bool DeviceIoControl(
-			IntPtr hDevice,
-			int dwIoControlCode,
-			byte[] lpInBuffer,
-			int nInBufferSize,
-			byte[] lpOutBuffer,
-			int nOutBufferSize,
-			out int lpBytesReturned,
-			IntPtr lpOverlapped);
+		internal extern static bool GetOverlappedResult(
+			IntPtr hFile,
+			[In] ref System.Threading.NativeOverlapped lpOverlapped,
+			out uint lpNumberOfBytesTransferred,
+			bool bWait);
 
 		[DllImport(@"setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
 		public static extern IntPtr SetupDiGetClassDevs(
