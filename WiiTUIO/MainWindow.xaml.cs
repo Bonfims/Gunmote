@@ -1198,30 +1198,26 @@ namespace WiiTUIO
         {
             if (DolphinBarHelper.IsDolphinBarPresent())
             {
-                // DolphinBar Mode 4: the bar's HID slots don't work with parallel
-                // Wii Remotes. Instead, use the PC's Bluetooth adapter (Qualcomm)
-                // to scan and pair — exactly like Wii Mote Hooks does.
-                Console.WriteLine("MainWindow: DolphinBar detected — using Qualcomm Bluetooth pairing");
+                // DolphinBar Mode 4: SKIP Bluetooth entirely.
+                // The Bluetooth scan runs in a loop and interferes with HID.
+                // Wii Mote Hooks also skips Bluetooth when HID devices are found.
+                // Go directly to HID-based discovery.
+                Console.WriteLine("MainWindow: DolphinBar detected — skipping Bluetooth, going direct HID");
 
-                if (wiiPair == null)
-                {
-                    wiiPair = new WiiCPP.WiiPair();
-                    wiiPair.addListener(this);
-                }
-
-                // Create the provider so it's ready once pairing succeeds
+                // Create the provider (lazy)
                 if (pWiiProvider == null)
                 {
                     this.createProvider();
                 }
 
-                // Use WiiPair to scan via Windows Bluetooth (Qualcomm adapter).
-                // This does NOT touch the DolphinBar's HID slots.
-                // The DolphinBar is used only for IR LEDs.
-                this.pairWiimoteText.Text = "Press 1+2 on your Wii Remote to pair via Bluetooth...";
+                // Stop any running WiiPair
+                this.stopWiiPair();
+
+                // Go straight to HID scan
+                this.pairWiimoteText.Text = "Scanning for Wii Remotes via HID...";
                 this.pairWiimotePressSync.Visibility = Visibility.Visible;
                 this.pairProgress.IsActive = true;
-                this.runWiiPair();
+                this.connectProvider();
                 return;
             }
 
