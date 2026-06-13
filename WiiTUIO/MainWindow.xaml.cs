@@ -1196,28 +1196,32 @@ namespace WiiTUIO
 
         private void PairWiimotes_Click(object sender, RoutedEventArgs e)
         {
-            // If DolphinBar is detected, skip Bluetooth pairing — the bar handles
-            // pairing via its SYNC button. Go straight to HID discovery.
             if (DolphinBarHelper.IsDolphinBarPresent())
             {
-                Console.WriteLine("MainWindow: DolphinBar detected — creating provider and connecting");
+                // DolphinBar Mode 4: the bar's HID slots don't work with parallel
+                // Wii Remotes. Instead, use the PC's Bluetooth adapter (Qualcomm)
+                // to scan and pair — exactly like Wii Mote Hooks does.
+                Console.WriteLine("MainWindow: DolphinBar detected — using Qualcomm Bluetooth pairing");
 
-                // Lazily create WiiPair and provider (not done in constructor to avoid
-                // disrupting the DolphinBar's existing Wii Remote connection).
                 if (wiiPair == null)
                 {
                     wiiPair = new WiiCPP.WiiPair();
                     wiiPair.addListener(this);
                 }
+
+                // Create the provider so it's ready once pairing succeeds
                 if (pWiiProvider == null)
                 {
                     this.createProvider();
                 }
 
-                this.pairWiimoteText.Text = "DolphinBar: scanning for Wii Remotes...";
+                // Use WiiPair to scan via Windows Bluetooth (Qualcomm adapter).
+                // This does NOT touch the DolphinBar's HID slots.
+                // The DolphinBar is used only for IR LEDs.
+                this.pairWiimoteText.Text = "Press 1+2 on your Wii Remote to pair via Bluetooth...";
                 this.pairWiimotePressSync.Visibility = Visibility.Visible;
                 this.pairProgress.IsActive = true;
-                this.connectProvider();
+                this.runWiiPair();
                 return;
             }
 
