@@ -264,6 +264,36 @@ namespace WiiTUIO.Provider
                     }
                     else
                     {
+                        // Wii Mote Hooks does a temporary open/close of each HID device
+                        // during its scan phase (GClass14.method_0 → GClass12.smethod_1).
+                        // The DolphinBar may need this to initialize each slot before
+                        // the actual connection attempt.
+                        Console.WriteLine("MultiWiiPointerProvider: Pre-scanning DolphinBar slots (open/close to wake)...");
+                        foreach (var devicePath in hidPaths)
+                        {
+                            try
+                            {
+                                var tempHandle = HIDImports.CreateFile(devicePath,
+                                    System.IO.FileAccess.ReadWrite, System.IO.FileShare.ReadWrite,
+                                    IntPtr.Zero, System.IO.FileMode.Open,
+                                    HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
+                                if (!tempHandle.IsInvalid)
+                                {
+                                    var tempAttrib = new HIDImports.HIDD_ATTRIBUTES();
+                                    tempAttrib.Size = Marshal.SizeOf(tempAttrib);
+                                    HIDImports.HidD_GetAttributes(tempHandle.DangerousGetHandle(), ref tempAttrib);
+                                    Console.WriteLine("  Pre-scan {0}: VID={1:x4} PID={2:x4}",
+                                        devicePath, (ushort)tempAttrib.VendorID, (ushort)tempAttrib.ProductID);
+                                    tempHandle.Close();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("  Pre-scan failed: " + ex.Message);
+                            }
+                        }
+                        Console.WriteLine("MultiWiiPointerProvider: Pre-scan complete.");
+
                         // Use reflection to call the internal Wiimote(string devicePath) constructor
                         var ctor = typeof(Wiimote).GetConstructor(
                             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
