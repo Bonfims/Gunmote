@@ -321,13 +321,23 @@ namespace WiiTUIO.Provider
                                     this.connectWiimote(pDevice);
                                     anyConnected = true;
                                 }
-                                catch (Exception ex)
+                                catch (WiimoteLib.WiimoteException ex)
                                 {
-                                    Console.WriteLine("MultiWiiPointerProvider: Connect failed for {0}: {1}", pDevice.HIDDevicePath, ex.Message);
-                                    // This triggers a full restart on next timer tick
-                                    // (matching Wii Mote Hooks "Timeout error; restarting setup")
+                                    // WiimoteException = timeout/read error → full restart
+                                    // (matches Wii Mote Hooks GException1)
+                                    Console.WriteLine("MultiWiiPointerProvider: Timeout on {0}, restarting: {1}", pDevice.HIDDevicePath, ex.Message);
+                                    try { pDevice.Disconnect(); } catch { }
                                     pErrorReport = ex;
                                     return false;
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Other errors (empty DolphinBar slot, device not functioning) →
+                                    // dispose and try next device
+                                    // (matches Wii Mote Hooks generic catch)
+                                    Console.WriteLine("MultiWiiPointerProvider: Skipping {0}: {1}", pDevice.HIDDevicePath, ex.Message);
+                                    try { pDevice.Disconnect(); } catch { }
+                                    // Continue to next device
                                 }
                             }
                             else

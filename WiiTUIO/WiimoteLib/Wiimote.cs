@@ -248,7 +248,7 @@ namespace WiimoteLib
 
 			if (mHandle.IsInvalid)
 			{
-				mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
+				throw new WiimoteException("Cannot open HID device: " + devicePath + " (error " + Marshal.GetLastWin32Error() + ")");
 			}
 
 			// create an attributes struct and initialize the size
@@ -256,43 +256,44 @@ namespace WiimoteLib
 			attrib.Size = Marshal.SizeOf(attrib);
 
 			// get the attributes of the current device
-			if(HIDImports.HidD_GetAttributes(mHandle.DangerousGetHandle(), ref attrib))
+			if(!HIDImports.HidD_GetAttributes(mHandle.DangerousGetHandle(), ref attrib))
 			{
-				// if the vendor and product IDs match up
-				if(attrib.VendorID == VID && (attrib.ProductID == PID || attrib.ProductID == 0x0330))
-				{
-					if (attrib.ProductID == 0x0330)
-					{
-						mIsNewWiimote = true;
-						Debug.WriteLine("Device ID: 0x0330 (RVL-CNT-01-TR)");
-					}
-					else
-					{
-						Debug.WriteLine("Device ID: 0x0306 (RVL-CNT-01)");
-					}
-
-					// create async FileStream — matches Wii Mote Hooks: buffer 22, async=true
-					mStream = new FileStream(mHandle, FileAccess.ReadWrite, REPORT_LENGTH, true);
-
-					// start async read — matches Wii Mote Hooks method_8
-					BeginAsyncRead();
-
-					// Test send-data method with fallback — matches Wii Mote Hooks method_3
-					TrySendDataMethod();
-
-					// read calibration — matches Wii Mote Hooks method_26
-					ReadWiimoteCalibration();
-
-					// force a status check — matches Wii Mote Hooks method_31
-					GetStatus();
-				}
-				else
-				{
-					// otherwise this isn't the controller, so close up the file handle
-					mHandle.Close();
-					throw new WiimoteException("Attempted to open a non-Wiimote device.");
-				}
+				mHandle.Close();
+				throw new WiimoteException("Cannot get HID attributes for: " + devicePath + " (error " + Marshal.GetLastWin32Error() + ")");
 			}
+
+			// if the vendor and product IDs match up
+			if(attrib.VendorID != VID || (attrib.ProductID != PID && attrib.ProductID != 0x0330))
+			{
+				// otherwise this isn't the controller, so close up the file handle
+				mHandle.Close();
+				throw new WiimoteException("Attempted to open a non-Wiimote device (VID=" + attrib.VendorID.ToString("x") + " PID=" + attrib.ProductID.ToString("x") + ").");
+			}
+
+			if (attrib.ProductID == 0x0330)
+			{
+				mIsNewWiimote = true;
+				Console.WriteLine("Device ID: 0x0330 (RVL-CNT-01-TR)");
+			}
+			else
+			{
+				Console.WriteLine("Device ID: 0x0306 (RVL-CNT-01)");
+			}
+
+			// create async FileStream — matches Wii Mote Hooks: buffer 22, async=true
+			mStream = new FileStream(mHandle, FileAccess.ReadWrite, REPORT_LENGTH, true);
+
+			// start async read — matches Wii Mote Hooks method_8
+			BeginAsyncRead();
+
+			// Test send-data method with fallback — matches Wii Mote Hooks method_3
+			TrySendDataMethod();
+
+			// read calibration — matches Wii Mote Hooks method_26
+			ReadWiimoteCalibration();
+
+			// force a status check — matches Wii Mote Hooks method_31
+			GetStatus();
 		}
 
 		/// <summary>
@@ -309,7 +310,7 @@ namespace WiimoteLib
 			}
 			catch
 			{
-				Debug.WriteLine("The current send-data method failed. Trying another one.");
+				Console.WriteLine("The current send-data method failed. Trying another one.");
 
 				if (mWriteMethodEnum == 0) // WriteFile failed → try SetOutputReport (Alt1)
 				{
@@ -323,7 +324,7 @@ namespace WiimoteLib
 					}
 					catch
 					{
-						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						Console.WriteLine("The send-data method failed yet again. Trying another one.");
 						mWriteMethodEnum = 2; // FileStream.Write (Alt2, legacy)
 						mUseFullReports = true;
 						mExclusiveAccess = false;
@@ -341,7 +342,7 @@ namespace WiimoteLib
 					}
 					catch
 					{
-						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						Console.WriteLine("The send-data method failed yet again. Trying another one.");
 						mWriteMethodEnum = 0; // WriteFile
 						mUseFullReports = false;
 						mExclusiveAccess = true;
@@ -359,7 +360,7 @@ namespace WiimoteLib
 					}
 					catch
 					{
-						Debug.WriteLine("The send-data method failed yet again. Trying another one.");
+						Console.WriteLine("The send-data method failed yet again. Trying another one.");
 						mWriteMethodEnum = 2; // FileStream.Write
 						mUseFullReports = true;
 						mExclusiveAccess = false;
@@ -1250,7 +1251,7 @@ namespace WiimoteLib
 		/// </summary>
 		private void WriteReport()
 		{
-			Debug.WriteLine("WriteReport: " + mBuff[0].ToString("x") + " method=" + mWriteMethodEnum + " fullRpt=" + mUseFullReports);
+			Console.WriteLine("WriteReport: " + mBuff[0].ToString("x") + " method=" + mWriteMethodEnum + " fullRpt=" + mUseFullReports);
 
 			if (mWriteMethodEnum == 0) // WriteFile (kernel32 overlapped)
 			{
@@ -1261,7 +1262,7 @@ namespace WiimoteLib
 				// ERROR_IO_PENDING (997) is normal for overlapped I/O
 				if (!flag && lastError != 997U)
 				{
-					Debug.WriteLine("WriteFile failed: error " + lastError);
+					Console.WriteLine("WriteFile failed: error " + lastError);
 				}
 			}
 			else if (mWriteMethodEnum == 1) // HidD_SetOutputReport
