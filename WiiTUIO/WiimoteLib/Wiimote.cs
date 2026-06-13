@@ -1070,7 +1070,7 @@ namespace WiimoteLib
 			WriteReport();
 
 			// signal the status report finished
-			if(!mStatusDone.WaitOne(3000, false))
+			if(!mStatusDone.WaitOne(6000, false)) // 6s timeout like Wii Mote Hooks
 				throw new WiimoteException("Timed out waiting for status report");
 		}
 
@@ -1220,7 +1220,7 @@ namespace WiimoteLib
 			if(mBuff[0] == (byte)OutputReport.WriteMemory)
 			{
 				Debug.WriteLine("Wait");
-				if(!mWriteDone.WaitOne(1000, false))
+				if(!mWriteDone.WaitOne(2000, false)) // 2s timeout (was 1s, parallel Wii Remotes may need more time)
 					Debug.WriteLine("Wait failed");
 			}
 		}
@@ -1268,7 +1268,7 @@ namespace WiimoteLib
 
 			WriteReport();
 
-			if(!mReadDone.WaitOne(1000, false))
+			if(!mReadDone.WaitOne(3000, false)) // 3s timeout (Wii Mote Hooks uses 2s; parallel Wii Remotes via DolphinBar may be slower)
 				throw new WiimoteException("Error reading data from Wiimote...is it connected?");
 
 			return mReadBuff;
