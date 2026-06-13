@@ -107,6 +107,15 @@ namespace WiimoteLib
 			byte[] lpReportBuffer,
 			uint ReportBufferLength);
 
+		// Direct WriteFile — Wii Mote Hooks "New" method uses this instead of FileStream
+		[DllImport("kernel32.dll", SetLastError = true)]
+		internal extern static bool WriteFile(
+			IntPtr hFile,
+			byte[] lpBuffer,
+			uint nNumberOfBytesToWrite,
+			out uint lpNumberOfBytesWritten,
+			IntPtr lpOverlapped);
+
 		// IOCTL for low-level HID output report — necessary for some
 		// parallel/third-party Wii Remotes (like Wii Mote Hooks "Alt2" method)
 		internal const int IOCTL_HID_SET_OUTPUT_REPORT = 0xB0195;

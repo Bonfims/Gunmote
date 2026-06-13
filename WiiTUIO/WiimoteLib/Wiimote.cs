@@ -100,7 +100,7 @@ namespace WiimoteLib
 		// use a different method to write reports
 		// 0 = FileStream.Write, 1 = HidD_SetOutputReport (default, matches Unity-Wiimote/STACK_MICROSOFT), 2 = IOCTL, -1 = unset
 		private int mWriteMethod = -1;
-		private bool mAltWriteMethod = true; // Start with HidD_SetOutputReport (like Unity-Wiimote "new" method)
+		private bool mAltWriteMethod = false; // Start with WriteFile (matches Wii Mote Hooks default for Win8+) (like Unity-Wiimote "new" method)
 
 		// HID device path of this Wiimote
 		private string mDevicePath = string.Empty;
@@ -1172,13 +1172,15 @@ namespace WiimoteLib
 					switch (method)
 					{
 						case 0:
-							if (mStream != null)
 							{
-								mStream.Write(mBuff, 0, REPORT_LENGTH);
-								written = true;
-								mWriteMethod = 0;
+								uint bytesWritten;
+								written = HIDImports.WriteFile(
+									this.mHandle.DangerousGetHandle(), mBuff,
+									(uint)(useShortReports ? GetActualReportLength() : REPORT_LENGTH),
+									out bytesWritten, IntPtr.Zero);
+								if (written) mWriteMethod = 0;
+								break;
 							}
-							break;
 						case 1:
 							written = HIDImports.HidD_SetOutputReport(
 								this.mHandle.DangerousGetHandle(), mBuff, (uint)(useShortReports ? GetActualReportLength() : mBuff.Length));
