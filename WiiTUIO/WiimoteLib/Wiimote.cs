@@ -1233,9 +1233,6 @@ namespace WiimoteLib
 				case (byte)OutputReport.Status:     return 2;  // Status request is 2 bytes
 				case (byte)OutputReport.ReadMemory: return 7;  // Read memory is 7 bytes
 				case (byte)OutputReport.WriteMemory: return 22; // Write memory is full 22 bytes
-				case (byte)OutputReport.SpeakerEnable: return 2;
-				case (byte)OutputReport.SpeakerMute:  return 2;
-				case (byte)OutputReport.SpeakerData:  return 22;
 				default: return REPORT_LENGTH; // fallback to full length
 			}
 		}
