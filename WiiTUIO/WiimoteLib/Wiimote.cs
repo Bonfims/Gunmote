@@ -303,73 +303,70 @@ namespace WiimoteLib
 		/// </summary>
 		private void TrySendDataMethod()
 		{
+			// Matches Wii Mote Hooks GClass12.method_3 fallback logic.
+			// Each fallback step is tried ONCE, and on failure we move
+			// to the next configuration. No fallthrough between if/else-if blocks.
+			//
+			// Fallback order depends on starting method:
+			//   WriteFile → SetOutputReport → FileStream.Write
+			//   FileStream.Write → SetOutputReport → WriteFile(exclusive)
+			//   SetOutputReport → WriteFile → FileStream.Write
+
+			// Step 1: try with current method
 			try
 			{
-				// Try with current method first
 				ReadData(0x0016, 7);
+				return; // success
 			}
-			catch
+			catch { }
+
+			// Step 2: first fallback
+			Console.WriteLine("The current send-data method failed. Trying another one.");
+			if (mWriteMethodEnum == 0) // WriteFile → SetOutputReport
 			{
-				Console.WriteLine("The current send-data method failed. Trying another one.");
-
-				if (mWriteMethodEnum == 0) // WriteFile failed → try SetOutputReport (Alt1)
-				{
-					mWriteMethodEnum = 1;
-					mUseFullReports = true;
-					mExclusiveAccess = false;
-					try
-					{
-						ReadData(0x0016, 7);
-						return;
-					}
-					catch
-					{
-						Console.WriteLine("The send-data method failed yet again. Trying another one.");
-						mWriteMethodEnum = 2; // FileStream.Write (Alt2, legacy)
-						mUseFullReports = true;
-						mExclusiveAccess = false;
-					}
-				}
-				else if (mWriteMethodEnum == 2) // FileStream.Write failed → try SetOutputReport
-				{
-					mWriteMethodEnum = 1;
-					mUseFullReports = true;
-					mExclusiveAccess = false;
-					try
-					{
-						ReadData(0x0016, 7);
-						return;
-					}
-					catch
-					{
-						Console.WriteLine("The send-data method failed yet again. Trying another one.");
-						mWriteMethodEnum = 0; // WriteFile
-						mUseFullReports = false;
-						mExclusiveAccess = true;
-					}
-				}
-				else if (mWriteMethodEnum == 1) // SetOutputReport failed → try WriteFile
-				{
-					mWriteMethodEnum = 0;
-					mUseFullReports = false;
-					mExclusiveAccess = false;
-					try
-					{
-						ReadData(0x0016, 7);
-						return;
-					}
-					catch
-					{
-						Console.WriteLine("The send-data method failed yet again. Trying another one.");
-						mWriteMethodEnum = 2; // FileStream.Write
-						mUseFullReports = true;
-						mExclusiveAccess = false;
-					}
-				}
-
-				// Last resort: try with whatever method we ended up with
-				ReadData(0x0016, 7);
+				mWriteMethodEnum = 1;
+				mUseFullReports = true;
 			}
+			else if (mWriteMethodEnum == 2) // FileStream.Write → SetOutputReport
+			{
+				mWriteMethodEnum = 1;
+				mUseFullReports = true;
+			}
+			else // SetOutputReport → WriteFile
+			{
+				mWriteMethodEnum = 0;
+				mUseFullReports = false;
+			}
+
+			try
+			{
+				ReadData(0x0016, 7);
+				return; // success
+			}
+			catch { }
+
+			// Step 3: second fallback
+			Console.WriteLine("The send-data method failed yet again. Trying another one.");
+			if (mWriteMethodEnum == 1) // SetOutputReport failed → FileStream.Write or WriteFile
+			{
+				// First fallback was SetOutputReport, now try final method
+				// based on what we haven't tried yet
+				mWriteMethodEnum = 2; // FileStream.Write
+				mUseFullReports = true;
+			}
+			else if (mWriteMethodEnum == 0) // WriteFile failed → FileStream.Write
+			{
+				mWriteMethodEnum = 2;
+				mUseFullReports = true;
+			}
+			else // FileStream.Write failed → WriteFile with exclusive
+			{
+				mWriteMethodEnum = 0;
+				mUseFullReports = false;
+			}
+
+			// Last try — if this fails, exception propagates
+			ReadData(0x0016, 7);
 		}
 
 		/// <summary>
