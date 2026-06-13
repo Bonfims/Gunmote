@@ -25,12 +25,12 @@ jobs:
 
       - name: Create output directories
         run: |
-          mkdir bin\x64\Release
-          mkdir bin\x64\Debug
+          mkdir bin\x86\Release
+          mkdir bin\x86\Debug
         continue-on-error: true
 
-      - name: Build Release x64
-        run: msbuild Gunmote.sln /t:Build /p:Configuration=Release /p:Platform=x64 /p:RestorePackages=false /m
+      - name: Build Release x86
+        run: msbuild Gunmote.sln /t:Build /p:Configuration=Release /p:Platform=x86 /p:RestorePackages=false /m
 
       - name: Prepare artifact
         shell: powershell
@@ -39,8 +39,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dist
 
           # Main executable and managed DLLs from WiiTUIO build
-          # Output path is ..\bin\x64\Release\ (relative to project dir) = repo root bin\x64\Release\
-          Copy-Item -Recurse -Force bin\x64\Release\* $dist\
+          # Output path is ..\bin\x86\Release\ (relative to project dir) = repo root bin\x86\Release\
+          Copy-Item -Recurse -Force bin\x86\Release\* $dist\
 
           # Native DLLs from source directory (P/Invoke dependencies)
           Copy-Item -Force WiiTUIO\VMultiDll_x64.dll $dist\
@@ -55,10 +55,10 @@ jobs:
           Copy-Item -Force WiiTUIO\Nefarius.ViGEm.Client.dll $dist\
 
           # Built native C++ DLL
-          Copy-Item -Force WiiCPP\bin\x64\Release\WiiCPP.dll $dist\
+          Copy-Item -Force WiiCPP\bin\x86\Release\WiiCPP.dll $dist\
 
           # Built managed DLLs
-          Copy-Item -Force HidLibrary\bin\x64\Release\HidLibrary.dll $dist\
+          Copy-Item -Force HidLibrary\bin\x86\Release\HidLibrary.dll $dist\
 
           # Keymaps
           if (Test-Path WiiTUIO\Keymaps) {
@@ -79,5 +79,5 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Gunmote-fork-x64
+          name: Gunmote-fork-x86
           path: dist/Gunmote/
