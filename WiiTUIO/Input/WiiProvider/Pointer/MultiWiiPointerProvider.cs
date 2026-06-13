@@ -312,35 +312,22 @@ namespace WiiTUIO.Provider
                         {
                             if (isDolphinBar)
                             {
-                                // DolphinBar Mode 4 with parallel Wii Remote:
-                                // WiimoteLib's ReadData fails on first attempt because the
-                                // HID path needs time to stabilize. Retry Connect() with
-                                // increasing delays, like Wii Mote Hooks does.
-                                bool connected = false;
-                                for (int retry = 0; retry < 8 && !connected; retry++)
+                                // Wii Mote Hooks pattern: try each device ONCE.
+                                // Timeout (GException1) → full restart from scratch.
+                                // Other error → remove this device, try next.
+                                // The timer callback will retry the whole process.
+                                try
                                 {
-                                    if (retry > 0)
-                                    {
-                                        // Close handle so bar can recover, then wait
-                                        try { pDevice.Disconnect(); } catch { }
-                                        int waitMs = 2000 + (retry * 1000); // 2s, 3s, 4s, ...
-                                        Console.WriteLine("MultiWiiPointerProvider: Retry {0}/{1} - waiting {2}ms...", retry + 1, 8, waitMs);
-                                        System.Threading.Thread.Sleep(waitMs);
-                                    }
-                                    try
-                                    {
-                                        this.connectWiimote(pDevice);
-                                        connected = true;
-                                        Console.WriteLine("MultiWiiPointerProvider: SUCCESS on attempt {0}!", retry + 1);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine("MultiWiiPointerProvider: Attempt {0} failed: {1}", retry + 1, ex.Message);
-                                        if (retry >= 7)
-                                        {
-                                            pErrorReport = ex;
-                                        }
-                                    }
+                                    this.connectWiimote(pDevice);
+                                    anyConnected = true;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("MultiWiiPointerProvider: Connect failed for {0}: {1}", pDevice.HIDDevicePath, ex.Message);
+                                    // This triggers a full restart on next timer tick
+                                    // (matching Wii Mote Hooks "Timeout error; restarting setup")
+                                    pErrorReport = ex;
+                                    return false;
                                 }
                             }
                             else
