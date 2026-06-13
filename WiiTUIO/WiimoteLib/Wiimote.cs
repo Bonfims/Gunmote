@@ -231,8 +231,14 @@ namespace WiimoteLib
 		private void OpenWiimoteDeviceHandle(string devicePath)
 		{
 			// open a read/write handle to our device using the DevicePath returned
-			mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
+			mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.None, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
 
+				// Wii Mote Hooks uses FileShare.None (exclusive access) for parallel Wii Remotes.
+				// If exclusive fails, fall back to shared access.
+				if (mHandle.IsInvalid)
+				{
+					mHandle = HIDImports.CreateFile(devicePath, FileAccess.ReadWrite, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, HIDImports.EFileAttributes.Overlapped, IntPtr.Zero);
+				}
 			// create an attributes struct and initialize the size
 			HIDImports.HIDD_ATTRIBUTES attrib = new HIDImports.HIDD_ATTRIBUTES();
 			attrib.Size = Marshal.SizeOf(attrib);
