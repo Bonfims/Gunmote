@@ -293,7 +293,18 @@ namespace WiiTUIO.Provider
                     Console.WriteLine("MultiWiiPointerProvider: Found {0} Wii Remote(s) via WiimoteLib", this.pWC.Count);
                 }
 
-                foreach (Wiimote pDevice in pWC)
+                // Wii Mote Hooks tries from mi_03 backwards and stops
+                // after first success. Opening empty DolphinBar slots may
+                // disrupt the slot with the active Wii Remote.
+                var devices = new List<Wiimote>(pWC);
+                bool anyConnected = false;
+                if (isDolphinBar)
+                {
+                    devices.Reverse(); // Try mi_03 first, mi_00 last
+                    Console.WriteLine("MultiWiiPointerProvider: Reversed device order (Wii Mote Hooks pattern)");
+                }
+
+                foreach (Wiimote pDevice in devices)
                 {
                     try
                     {
