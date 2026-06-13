@@ -283,10 +283,12 @@ namespace WiiCPP {
 							do
 							{
 								String ^szName = gcnew String(btdi.szName);
-								System::String^ str = System::String::Format(GetLocalizedText("Pairing_FoundDevice"), szName);
+								System::String^ str = System::String::Format("Found: '{0}' [{1}] COD=0x{2:X6}", szName, gcnew System::String(FormatBTAddress(btdi.Address)), btdi.ulClassofDevice);
 								listener->pairingConsole(str);
 
-								if (!wcscmp(btdi.szName, L"Nintendo RVL-CNT-01-TR") || !wcscmp(btdi.szName, L"Nintendo RVL-CNT-01"))
+								bool isGenuine = !wcscmp(btdi.szName, L"Nintendo RVL-CNT-01-TR") || !wcscmp(btdi.szName, L"Nintendo RVL-CNT-01");
+					bool isParallel = (wcslen(btdi.szName) == 0) && ((btdi.ulClassofDevice & 0x00001F00) == 0x00000500);
+					if (isGenuine || isParallel)
 								{
 									WCHAR pass[6];
 									DWORD pcServices = 16;
