@@ -101,10 +101,10 @@ namespace WiimoteLib
 		// 0 = WriteFile (kernel32, overlapped — Win8+ default)
 		// 1 = HidD_SetOutputReport (legacy Alt1)
 		// 2 = FileStream.Write (legacy Alt2)
-		private int mWriteMethodEnum = 0; // Start with WriteFile (matches Wii Mote Hooks Win8+ default)
+		private int mWriteMethodEnum = 2; // TEST: FileStream.Write only — skip overlapped WriteFile
 
 		// Matches Wii Mote Hooks Boolean_1 — when true, uses full 22-byte reports; when false, short reports
-		private bool mUseFullReports = false; // false = short reports (Win8+ default with WriteFile)
+		private bool mUseFullReports = true; // TEST: full reports for FileStream.Write
 
 		// Matches Wii Mote Hooks Boolean_2 — when true, uses FileShare.None (exclusive access) for legacy mode
 		private bool mExclusiveAccess = false;
@@ -303,69 +303,11 @@ namespace WiimoteLib
 		/// </summary>
 		private void TrySendDataMethod()
 		{
-			// Matches Wii Mote Hooks GClass12.method_3 fallback logic.
-			// Each fallback step is tried ONCE, and on failure we move
-			// to the next configuration. No fallthrough between if/else-if blocks.
-			//
-			// Fallback order depends on starting method:
-			//   WriteFile → SetOutputReport → FileStream.Write
-			//   FileStream.Write → SetOutputReport → WriteFile(exclusive)
-			//   SetOutputReport → WriteFile → FileStream.Write
-
-			// Step 1: try with current method
-			try
-			{
-				ReadData(0x0016, 7);
-				return; // success
-			}
-			catch { }
-
-			// Step 2: first fallback
-			Console.WriteLine("The current send-data method failed. Trying another one.");
-			if (mWriteMethodEnum == 0) // WriteFile → SetOutputReport
-			{
-				mWriteMethodEnum = 1;
-				mUseFullReports = true;
-			}
-			else if (mWriteMethodEnum == 2) // FileStream.Write → SetOutputReport
-			{
-				mWriteMethodEnum = 1;
-				mUseFullReports = true;
-			}
-			else // SetOutputReport → WriteFile
-			{
-				mWriteMethodEnum = 0;
-				mUseFullReports = false;
-			}
-
-			try
-			{
-				ReadData(0x0016, 7);
-				return; // success
-			}
-			catch { }
-
-			// Step 3: second fallback
-			Console.WriteLine("The send-data method failed yet again. Trying another one.");
-			if (mWriteMethodEnum == 1) // SetOutputReport failed → FileStream.Write or WriteFile
-			{
-				// First fallback was SetOutputReport, now try final method
-				// based on what we haven't tried yet
-				mWriteMethodEnum = 2; // FileStream.Write
-				mUseFullReports = true;
-			}
-			else if (mWriteMethodEnum == 0) // WriteFile failed → FileStream.Write
-			{
-				mWriteMethodEnum = 2;
-				mUseFullReports = true;
-			}
-			else // FileStream.Write failed → WriteFile with exclusive
-			{
-				mWriteMethodEnum = 0;
-				mUseFullReports = false;
-			}
-
-			// Last try — if this fails, exception propagates
+			// TEST: Direct FileStream.Write only — matching Wii Mote Hooks success path.
+			// The Wii Mote Hooks log shows WriteFile and SetOutputReport both fail
+			// on DolphinBar, and only FileStream.Write succeeds (in method_26).
+			// We skip the failing methods and go straight to the one that works.
+			Console.WriteLine("TrySendDataMethod: using FileStream.Write directly (DolphinBar test)");
 			ReadData(0x0016, 7);
 		}
 
